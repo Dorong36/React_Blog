@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import User from '../../ models/user.js'
+import User from '../../models/user.js'
 
 /*
     POST /api/auth/register

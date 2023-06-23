@@ -9,6 +9,7 @@ import mongoose from 'mongoose';
 
 // 확장자 꼭 붙여주기!!
 import api from './api/index.js'
+// import createFakeData from './createFakeData.js';
 import jwtMiddleware from './lib/jwtMiddleware.js';
 
 // 비구조화할당을 통해 process.env 내부 값에 대한 레퍼런스 만들기
@@ -18,6 +19,7 @@ mongoose
 .connect(MONGO_URI)
     .then(() => {
         console.log('Connected to MongoDB');
+        // createFakeData();
     })
     .catch( e => {
         console.error(e);

@@ -1,4 +1,4 @@
-import Post from '../../ models/posts.js'
+import Post from '../../models/posts.js'
 import request from '../../../node_modules/koa/lib/request.js';
 import mongoose from 'mongoose';
 import Joi from 'joi'
@@ -6,13 +6,34 @@ import Joi from 'joi'
 
 // id 검증
 const {ObjectId} = mongoose.Types;
-export const checkObjectId = (ctx, next) => {
+// export const checkObjectId = (ctx, next) => {
+//   const {id} = ctx.params;
+//   if(!ObjectId.isValid(id)) {
+//     ctx.status = 400; // Bad Request
+//     return;
+//   }
+//   return next();
+// }
+
+// 수정 및 삭제를 작성자만 가능하도록 하는 미들웨어
+export const getPostById = async (ctx, next) => {
   const {id} = ctx.params;
-  if(!ObjectId.isValid(id)) {
+  if(!ObjectId.isValid(id)){
     ctx.status = 400; // Bad Request
     return;
   }
-  return next();
+  try {
+    const post = await Post.findById(id);
+    // 포스트가 존재하지 않을 때
+    if(!post) {
+      ctx.status = 404; // Not Found
+      return;
+    }
+    ctx.state.post = post;
+    return next();
+  } catch (e) {
+    ctx.throw(500, e);
+  }
 }
 
 
@@ -47,6 +68,7 @@ export const write = async ctx => {
     title,
     body,
     tags,
+    user : ctx.state.user,
   })
   try {
     await post.save();
@@ -60,9 +82,28 @@ export const write = async ctx => {
   GET /api/posts
 */
 export const list = async ctx => {
+  // query로 페이지 번호 알아와서 그만큼 skip해주기
+  // query는 문자열 => 숫자로 변환, 값이 없으면 기본값 1 사용
+  const page = parseInt(ctx.query.page || '1', 10);
+
+  if(page < 1) {
+    ctx.status = 400;
+    return;
+  }
+
   try {
-    const posts = await Post.find().exec();
-    ctx.body = posts;
+    const posts = await Post.find()
+      .sort({_id : -1}) // _id 기준 내림차순 정렬
+      .limit(10) // 10개씩 보여주기
+      .skip((page - 1) * 10) 
+      .lean() // body 글자수 제한을 위해 JSON 형태로 불러오기 (기본은 mongoose 문서 인스턴스 형태)
+      .exec();
+    const postCount = await Post.countDocuments().exec();
+    ctx.set('Last-Page', Math.ceil(postCount / 10));
+    ctx.body = posts.map(post => ({
+      ...post,
+      body : post.body.length < 200 ? post.body : `${post.body.slice(1, 200)}...`
+    }));
   } catch (e) {
     ctx.throw(500, e)
   }
@@ -72,17 +113,18 @@ export const list = async ctx => {
   GET /api/posts/:id
  */
 export const read = async ctx => {
-  const {id} = ctx.params;
-  try {
-    const post = await Post.findById(id).exec();
-    if(!post) {
-      ctx.status = 404; // not found
-      return;
-    }
-    ctx.body = post;
-  }catch (e) {
-    ctx.throw(500, e)
-  }
+  // const {id} = ctx.params;
+  // try {
+  //   const post = await Post.findById(id).exec();
+  //   if(!post) {
+  //     ctx.status = 404; // not found
+  //     return;
+  //   }
+  //   ctx.body = post;
+  // }catch (e) {
+  //   ctx.throw(500, e)
+  // }
+  ctx.body = ctx.state.posts;
 }
 
 /*
