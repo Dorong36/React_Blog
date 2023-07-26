@@ -15,7 +15,8 @@ const {ObjectId} = mongoose.Types;
 //   return next();
 // }
 
-// 수정 및 삭제를 작성자만 가능하도록 하는 미들웨어
+// 수정 및 삭제를 작성자만 가능하도록 하는 미들웨어 작성하려면
+// 먼저 id로 포스트 조회하는 작업도 미들웨어로 빼야함
 export const getPostById = async (ctx, next) => {
   const {id} = ctx.params;
   if(!ObjectId.isValid(id)){
@@ -34,6 +35,17 @@ export const getPostById = async (ctx, next) => {
   } catch (e) {
     ctx.throw(500, e);
   }
+}
+
+// 이제 진짜 작성자만 수정, 삭제가 가능하게 하는 미들웨어
+export const checkOwnPost = (ctx, next) => {
+  const {user, post} = ctx.state;
+  if(post.user._id.toString() !== user._id){
+    // 🌟 MongoDB에서 조회한 데이터의 id 값을 문자열과 비교할 때는 반드시 .toString()을 해줘야함!!!
+    ctx.status = 403; // forbidden
+    return;
+  }
+  return next();
 }
 
 
@@ -91,14 +103,22 @@ export const list = async ctx => {
     return;
   }
 
+  // 특정 사용자 / 태그로 조회하는 코드 추가
+  const {tag, username} = ctx.query;
+  // tag, username 값이 유효하면 객체 안에 넣고, 그렇지 않으면 넣지 않음
+  const query = {
+    ...(username? {'user.username' : username} : {}),
+    ...(tag ? { tags : tag } : {}),
+  };
+
   try {
-    const posts = await Post.find()
+    const posts = await Post.find(query)
       .sort({_id : -1}) // _id 기준 내림차순 정렬
       .limit(10) // 10개씩 보여주기
       .skip((page - 1) * 10) 
       .lean() // body 글자수 제한을 위해 JSON 형태로 불러오기 (기본은 mongoose 문서 인스턴스 형태)
       .exec();
-    const postCount = await Post.countDocuments().exec();
+    const postCount = await Post.countDocuments(query).exec();
     ctx.set('Last-Page', Math.ceil(postCount / 10));
     ctx.body = posts.map(post => ({
       ...post,
@@ -112,7 +132,7 @@ export const list = async ctx => {
 /*
   GET /api/posts/:id
  */
-export const read = async ctx => {
+export const read = ctx => {
   // const {id} = ctx.params;
   // try {
   //   const post = await Post.findById(id).exec();
@@ -124,7 +144,7 @@ export const read = async ctx => {
   // }catch (e) {
   //   ctx.throw(500, e)
   // }
-  ctx.body = ctx.state.posts;
+  ctx.body = ctx.state.post;
 }
 
 /*

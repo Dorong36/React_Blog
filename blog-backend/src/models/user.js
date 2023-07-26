@@ -7,7 +7,6 @@ const UserSchema = new Schema({
     hashedPassword : String,
 })
 
-
 // 인스턴스 메서드
 UserSchema.methods.setPassword = async function(password){
     const hash = await bcrypt.hash(password, 10);
